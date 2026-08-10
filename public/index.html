@@ -286,38 +286,53 @@
   .voice-mode-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(10,15,25,0.55);
-    backdrop-filter: blur(6px);
+    background: #000;
     display: none;
     align-items: center;
     justify-content: center;
     flex-direction: column;
-    gap: 22px;
+    gap: 26px;
     z-index: 50;
   }
   .voice-mode-overlay.show { display: flex; }
   .voice-orb {
-    width: 130px;
-    height: 130px;
+    width: 190px;
+    height: 190px;
     border-radius: 50%;
-    background: linear-gradient(135deg, #4285f4, #9b72cb);
-    box-shadow: 0 0 60px rgba(66,133,244,0.55);
-    animation: orb-idle 3s ease-in-out infinite;
+    position: relative;
+    background:
+      radial-gradient(circle at 30% 28%, rgba(255,255,255,0.95) 0%, rgba(190,225,255,0.7) 22%, rgba(120,190,255,0.55) 45%, rgba(60,130,220,0.4) 68%, rgba(20,60,120,0.25) 100%);
+    filter: blur(0.5px);
+    box-shadow: 0 0 70px rgba(100,170,255,0.35), inset 0 0 40px rgba(255,255,255,0.25);
+    animation: orb-idle 4s ease-in-out infinite;
+    overflow: hidden;
   }
-  .voice-orb.listening { animation: orb-listen 1s ease-in-out infinite; background: linear-gradient(135deg, #34a853, #4285f4); }
-  .voice-orb.speaking { animation: orb-speak 0.6s ease-in-out infinite; background: linear-gradient(135deg, #e74c3c, #f4b400); }
-  @keyframes orb-idle { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
-  @keyframes orb-listen { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
-  @keyframes orb-speak { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
-  .voice-status { color: #fff; font-size: 15px; font-weight: 500; text-shadow: 0 1px 6px rgba(0,0,0,0.4); }
+  .voice-orb::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 65% 70%, rgba(255,255,255,0.5) 0%, transparent 35%),
+      radial-gradient(circle at 25% 75%, rgba(150,210,255,0.4) 0%, transparent 40%);
+    animation: orb-swirl 6s ease-in-out infinite;
+  }
+  .voice-orb.listening { animation: orb-listen 1.2s ease-in-out infinite; }
+  .voice-orb.speaking { animation: orb-speak 0.7s ease-in-out infinite; }
+  @keyframes orb-idle { 0%,100% { transform: scale(1); } 50% { transform: scale(1.04); } }
+  @keyframes orb-swirl { 0%,100% { transform: rotate(0deg) scale(1); } 50% { transform: rotate(15deg) scale(1.08); } }
+  @keyframes orb-listen { 0%,100% { transform: scale(1); } 50% { transform: scale(1.12); } }
+  @keyframes orb-speak { 0%,100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+  .voice-name { color: #fff; font-size: 20px; font-weight: 600; margin-top: 4px; }
+  .voice-status { color: rgba(255,255,255,0.65); font-size: 14px; font-weight: 400; }
   .voice-close-btn {
     position: absolute;
     bottom: 60px;
     width: 52px;
     height: 52px;
     border-radius: 50%;
-    background: rgba(255,255,255,0.18);
-    border: 1px solid rgba(255,255,255,0.4);
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.25);
     color: #fff;
     font-size: 20px;
     cursor: pointer;
@@ -325,26 +340,7 @@
     align-items: center;
     justify-content: center;
   }
-  .voice-close-btn:hover { background: rgba(255,255,255,0.3); }
-  .voice-select-bar {
-    position: absolute;
-    top: 50px;
-    display: flex;
-    gap: 10px;
-  }
-  .voice-select-btn {
-    background: rgba(255,255,255,0.12);
-    border: 1px solid rgba(255,255,255,0.3);
-    color: #fff;
-    font-size: 13px;
-    font-weight: 500;
-    padding: 9px 16px;
-    border-radius: 999px;
-    cursor: pointer;
-    transition: background 0.15s, border-color 0.15s;
-  }
-  .voice-select-btn:hover { background: rgba(255,255,255,0.22); }
-  .voice-select-btn.active { background: rgba(66,133,244,0.85); border-color: rgba(66,133,244,0.9); }
+  .voice-close-btn:hover { background: rgba(255,255,255,0.2); }
   .file-chip-bar {
     max-width: 720px;
     margin: 0 auto 10px auto;
@@ -462,12 +458,8 @@
   </div>
 
   <div class="voice-mode-overlay" id="voiceModeOverlay">
-    <div class="voice-select-bar" id="voiceSelectBar">
-      <button class="voice-select-btn active" data-gender="female">👩 Ayol</button>
-      <button class="voice-select-btn" data-gender="male">👨 Erkak</button>
-      <button class="voice-select-btn" data-gender="child">🧒 Bola</button>
-    </div>
     <div class="voice-orb" id="voiceOrb"></div>
+    <div class="voice-name">GrapeGPT</div>
     <div class="voice-status" id="voiceStatus">Tinglayapman...</div>
     <button class="voice-close-btn" id="voiceCloseBtn" title="Yopish">✕</button>
   </div>
@@ -506,6 +498,14 @@
   let pendingImage = null;
   let pendingFiles = [];
   let isStreaming = false;
+
+  // Ovozlarni oldindan yuklab qo'yamiz (tezlik uchun)
+  if ('speechSynthesis' in window) {
+    window.speechSynthesis.getVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', () => {
+      window.speechSynthesis.getVoices();
+    });
+  }
 
   function loadChats() {
     try {
@@ -718,54 +718,26 @@
   const voiceOrb = document.getElementById('voiceOrb');
   const voiceStatus = document.getElementById('voiceStatus');
   const voiceCloseBtn = document.getElementById('voiceCloseBtn');
-  const voiceSelectBtns = document.querySelectorAll('.voice-select-btn');
 
   let voiceModeActive = false;
   let voiceRecognition = null;
   let bargeInRecognition = null;
-  let selectedGender = 'female';
   let isAiSpeaking = false;
+  let cachedUzVoice = null;
 
-  // Ovozlarni jins bo'yicha taxminiy ajratish (brauzer ovoz nomlariga qarab)
-  const FEMALE_HINTS = ['female', 'zira', 'samantha', 'victoria', 'susan', 'karen', 'moira', 'tessa', 'fiona', 'ayşe', 'milena', 'anna', 'ekaterina', 'google uk english female', 'google us english'];
-  const MALE_HINTS = ['male', 'david', 'daniel', 'alex', 'fred', 'george', 'james', 'mark', 'yuri', 'google uk english male'];
-  const CHILD_HINTS = ['child', 'kid', 'junior', 'young'];
-
-  function classifyVoice(voice) {
-    const n = voice.name.toLowerCase();
-    if (CHILD_HINTS.some(h => n.includes(h))) return 'child';
-    if (FEMALE_HINTS.some(h => n.includes(h))) return 'female';
-    if (MALE_HINTS.some(h => n.includes(h))) return 'male';
-    return 'female'; // aksariyat tizim ovozlari standart — ayol sifatida ko'rsatamiz
-  }
-
-  function pickVoiceForGender(gender) {
+  // Faqat o'zbek (yoki eng yaqin turkiy/rus) ovozni bir marta topib, keshda saqlaymiz — tezlik uchun
+  function pickBestUzVoice() {
+    if (cachedUzVoice) return cachedUzVoice;
     const voices = window.speechSynthesis.getVoices();
     if (voices.length === 0) return null;
-
-    // Til bo'yicha ustuvorlik: uz -> tr (turkiy, yaqin talaffuz) -> ru -> en -> istalgan
     const langPriority = ['uz', 'tr', 'ru', 'en'];
-    let candidates = voices;
-
     for (const lang of langPriority) {
-      const inLang = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith(lang));
-      if (inLang.length > 0) { candidates = inLang; break; }
+      const found = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(lang));
+      if (found) { cachedUzVoice = found; return found; }
     }
-
-    const matched = candidates.filter(v => classifyVoice(v) === gender);
-    if (matched.length > 0) return matched[0];
-
-    // Bola ovozi topilmasa, ayol ovozini balandroq pitch bilan simulyatsiya qilamiz
-    return candidates[0] || voices[0];
+    cachedUzVoice = voices[0];
+    return cachedUzVoice;
   }
-
-  voiceSelectBtns.forEach(btn => {
-    btn.addEventListener('click', () => {
-      voiceSelectBtns.forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      selectedGender = btn.dataset.gender;
-    });
-  });
 
   function speakText(text) {
     if (!('speechSynthesis' in window) || !text) {
@@ -774,10 +746,10 @@
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    const voice = pickVoiceForGender(selectedGender);
+    const voice = pickBestUzVoice();
     if (voice) utterance.voice = voice;
-    utterance.rate = 1;
-    utterance.pitch = selectedGender === 'child' ? 1.6 : (selectedGender === 'male' ? 0.9 : 1.05);
+    utterance.rate = 1.05;
+    utterance.pitch = 1;
 
     utterance.onstart = () => {
       isAiSpeaking = true;
