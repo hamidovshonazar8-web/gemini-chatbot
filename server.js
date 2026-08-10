@@ -19,7 +19,7 @@ if (!GEMINI_API_KEY) {
 }
 
 // Model nomi - kerak bo'lsa o'zgartirishingiz mumkin
-const MODEL = "gemini-2.5-flash";
+const MODEL = "gemini-3.6-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?key=${GEMINI_API_KEY}`;
 
 app.use(cors());
