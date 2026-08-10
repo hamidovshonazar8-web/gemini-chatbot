@@ -19,7 +19,7 @@ if (!GEMINI_API_KEY) {
 }
 
 // Model nomi - kerak bo'lsa o'zgartirishingiz mumkin
-const MODEL = "gemini-3.5-flash";
+const MODEL = "gemini-2.5-flash";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:streamGenerateContent?key=${GEMINI_API_KEY}`;
 
 app.use(cors());
@@ -63,16 +63,21 @@ app.post("/api/chat", async (req, res) => {
       };
     });
 
-    const geminiResponse = await fetch(GEMINI_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents,
-        generationConfig: {
-          temperature: 1,
-        },
-      }),
-    });
+const geminiResponse = await fetch(GEMINI_URL, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    system_instruction: {
+      parts: [{
+        text: "Siz foydali AI yordamchisiz. Foydalanuvchi o'zbek tilida yozsa — o'zbek tilida javob bering. Foydalanuvchi ingliz tilida yozsa — ingliz tilida javob bering. Har doim foydalanuvchi yozgan tilda javob bering, aniq va tushunarli tarzda."
+      }]
+    },
+    contents,
+    generationConfig: {
+      temperature: 1,
+    },
+  }),
+});
 
     if (!geminiResponse.ok) {
       const errText = await geminiResponse.text();
