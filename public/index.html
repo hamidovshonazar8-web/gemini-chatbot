@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>GrapeGPT</title>
- <meta name="description" content="GrapeGPT — sun'iy intellekt bilan suhbatlashish uchun chat yordamchisi." />
+<meta name="description" content="GrapeGPT — sun'iy intellekt bilan suhbatlashish uchun chat yordamchisi." />
 <meta name="google-site-verification" content="VkmVxzCVKFLD52cg87yLk6OURcpybIy5kmmfOX2nq_4" />
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -246,6 +246,56 @@
     transition: background 0.15s;
   }
   .attach-btn:hover { background: rgba(255,255,255,0.55); }
+  .mic-btn {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.35);
+    border: 1px solid rgba(255,255,255,0.5);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 16px;
+    color: #12213a;
+    transition: background 0.15s;
+  }
+  .mic-btn:hover { background: rgba(255,255,255,0.55); }
+  .mic-btn.recording { background: #e74c3c; color: #fff; animation: pulse 1.1s infinite; }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(231,76,60,0.5); } 50% { box-shadow: 0 0 0 8px rgba(231,76,60,0); } }
+  .file-chip-bar {
+    max-width: 720px;
+    margin: 0 auto 10px auto;
+    display: none;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 0 20px;
+  }
+  .file-chip-bar.show { display: flex; }
+  .file-chip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.35);
+    border: 1px solid rgba(255,255,255,0.5);
+    border-radius: 12px;
+    padding: 7px 10px;
+    font-size: 12px;
+    color: #12213a;
+  }
+  .file-chip .file-icon { font-size: 14px; }
+  .file-chip .file-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .file-chip .remove-file {
+    background: none;
+    border: none;
+    color: #33415e;
+    cursor: pointer;
+    font-size: 13px;
+    padding: 0;
+    line-height: 1;
+  }
+  .file-chip .remove-file:hover { color: #c0392b; }
   textarea {
     flex: 1;
     background: transparent;
@@ -317,9 +367,11 @@
 
     <div class="input-area">
       <div class="image-preview-bar" id="imagePreviewBar"></div>
+      <div class="file-chip-bar" id="fileChipBar"></div>
       <div class="input-inner glass">
-        <button class="attach-btn" id="attachBtn" title="Rasm yuklash">📎</button>
-        <input type="file" id="fileInput" accept="image/*" style="display:none">
+        <button class="attach-btn" id="attachBtn" title="Fayl yuklash">📎</button>
+        <input type="file" id="fileInput" accept="image/*,.txt,.md,.csv,.json,.js,.ts,.py,.java,.c,.cpp,.cs,.go,.rb,.php,.html,.css,.sh,.yaml,.yml,.xml,.sql,.log" style="display:none">
+        <button class="mic-btn" id="micBtn" title="Ovozli kiritish">🎤</button>
         <textarea id="userInput" placeholder="Xabar yozing..." rows="1"></textarea>
         <button class="send-btn" id="sendBtn">➤</button>
       </div>
@@ -341,6 +393,8 @@
   const attachBtn = document.getElementById('attachBtn');
   const fileInput = document.getElementById('fileInput');
   const imagePreviewBar = document.getElementById('imagePreviewBar');
+  const fileChipBar = document.getElementById('fileChipBar');
+  const micBtn = document.getElementById('micBtn');
 
   const WELCOME_HTML = `
     <div class="welcome" id="welcome">
@@ -357,6 +411,7 @@
   let chats = loadChats();
   let activeChatId = chats.length > 0 ? chats[0].id : null;
   let pendingImage = null;
+  let pendingFiles = [];
   let isStreaming = false;
 
   function loadChats() {
@@ -470,14 +525,99 @@
   fileInput.addEventListener('change', () => {
     const file = fileInput.files[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      pendingImage = reader.result;
-      renderImagePreview();
-    };
-    reader.readAsDataURL(file);
+
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        pendingImage = reader.result;
+        renderImagePreview();
+      };
+      reader.readAsDataURL(file);
+    } else {
+      const reader = new FileReader();
+      reader.onload = () => {
+        pendingFiles.push({ name: file.name, content: reader.result });
+        renderFileChips();
+      };
+      reader.readAsText(file);
+    }
     fileInput.value = '';
   });
+
+  function renderFileChips() {
+    if (pendingFiles.length === 0) {
+      fileChipBar.classList.remove('show');
+      fileChipBar.innerHTML = '';
+      return;
+    }
+    fileChipBar.classList.add('show');
+    fileChipBar.innerHTML = pendingFiles.map((f, i) => `
+      <div class="file-chip">
+        <span class="file-icon">📄</span>
+        <span class="file-name">${f.name}</span>
+        <button class="remove-file" data-idx="${i}">✕</button>
+      </div>
+    `).join('');
+    fileChipBar.querySelectorAll('.remove-file').forEach(btn => {
+      btn.addEventListener('click', () => {
+        pendingFiles.splice(Number(btn.dataset.idx), 1);
+        renderFileChips();
+      });
+    });
+  }
+
+  // ===== Ovozli kiritish (Speech-to-Text) =====
+  const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recognition = null;
+  let isRecording = false;
+
+  if (SpeechRecognitionAPI) {
+    recognition = new SpeechRecognitionAPI();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'uz-UZ';
+
+    let baseText = '';
+
+    recognition.addEventListener('start', () => {
+      isRecording = true;
+      micBtn.classList.add('recording');
+      baseText = userInput.value ? userInput.value + ' ' : '';
+    });
+
+    recognition.addEventListener('result', (e) => {
+      let interim = '';
+      let final = '';
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const transcript = e.results[i][0].transcript;
+        if (e.results[i].isFinal) final += transcript;
+        else interim += transcript;
+      }
+      userInput.value = baseText + final + interim;
+      if (final) baseText += final;
+      userInput.dispatchEvent(new Event('input'));
+    });
+
+    recognition.addEventListener('end', () => {
+      isRecording = false;
+      micBtn.classList.remove('recording');
+    });
+
+    recognition.addEventListener('error', () => {
+      isRecording = false;
+      micBtn.classList.remove('recording');
+    });
+
+    micBtn.addEventListener('click', () => {
+      if (isRecording) {
+        recognition.stop();
+      } else {
+        try { recognition.start(); } catch (e) { /* ignore */ }
+      }
+    });
+  } else {
+    micBtn.style.display = 'none';
+  }
 
   function renderImagePreview() {
     if (!pendingImage) {
@@ -520,16 +660,29 @@
     const chat = getActiveChat();
 
     const imageToSend = pendingImage;
+    const filesToSend = pendingFiles.slice();
     userInput.value = '';
     userInput.style.height = 'auto';
     pendingImage = null;
+    pendingFiles = [];
     renderImagePreview();
+    renderFileChips();
 
-    renderMessageEl('user', text, imageToSend);
-    chat.messages.push({ role: 'user', text, image: imageToSend || undefined });
+    let fullText = text;
+    if (filesToSend.length > 0) {
+      const filesBlock = filesToSend.map(f => `\n\n--- Fayl: ${f.name} ---\n${f.content}`).join('');
+      fullText = (text ? text : 'Quyidagi fayl(lar)ni ko\'rib chiqing:') + filesBlock;
+    }
+
+    const displayText = filesToSend.length > 0
+      ? (text ? text + '\n' : '') + filesToSend.map(f => `📄 ${f.name}`).join('  ')
+      : text;
+
+    renderMessageEl('user', displayText, imageToSend);
+    chat.messages.push({ role: 'user', text: fullText, image: imageToSend || undefined });
 
     if (chat.messages.length === 1) {
-      chat.title = (text || 'Rasm bilan suhbat').slice(0, 40);
+      chat.title = (text || (imageToSend ? 'Rasm bilan suhbat' : 'Fayl bilan suhbat')).slice(0, 40);
       renderChatList();
     }
     saveChats();
