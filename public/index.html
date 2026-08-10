@@ -341,6 +341,28 @@
     justify-content: center;
   }
   .voice-close-btn:hover { background: rgba(255,255,255,0.2); }
+  .voice-lang-bar {
+    position: absolute;
+    top: 50px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 0 20px;
+  }
+  .voice-lang-btn {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.25);
+    color: rgba(255,255,255,0.8);
+    font-size: 13px;
+    font-weight: 500;
+    padding: 8px 15px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .voice-lang-btn:hover { background: rgba(255,255,255,0.2); }
+  .voice-lang-btn.active { background: rgba(255,255,255,0.9); color: #12213a; border-color: rgba(255,255,255,0.9); }
   .file-chip-bar {
     max-width: 720px;
     margin: 0 auto 10px auto;
@@ -458,6 +480,12 @@
   </div>
 
   <div class="voice-mode-overlay" id="voiceModeOverlay">
+    <div class="voice-lang-bar" id="voiceLangBar">
+      <button class="voice-lang-btn active" data-lang="uz-UZ">O'zbek</button>
+      <button class="voice-lang-btn" data-lang="ru-RU">Русский</button>
+      <button class="voice-lang-btn" data-lang="en-US">English</button>
+      <button class="voice-lang-btn" data-lang="tr-TR">Türkçe</button>
+    </div>
     <div class="voice-orb" id="voiceOrb"></div>
     <div class="voice-name">GrapeGPT</div>
     <div class="voice-status" id="voiceStatus">Tinglayapman...</div>
@@ -718,25 +746,34 @@
   const voiceOrb = document.getElementById('voiceOrb');
   const voiceStatus = document.getElementById('voiceStatus');
   const voiceCloseBtn = document.getElementById('voiceCloseBtn');
+  const voiceLangBtns = document.querySelectorAll('.voice-lang-btn');
 
   let voiceModeActive = false;
   let voiceRecognition = null;
   let bargeInRecognition = null;
   let isAiSpeaking = false;
-  let cachedUzVoice = null;
+  let selectedVoiceLang = 'uz-UZ';
+  let voiceCache = {};
 
-  // Faqat o'zbek (yoki eng yaqin turkiy/rus) ovozni bir marta topib, keshda saqlaymiz — tezlik uchun
-  function pickBestUzVoice() {
-    if (cachedUzVoice) return cachedUzVoice;
+  voiceLangBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      voiceLangBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedVoiceLang = btn.dataset.lang;
+    });
+  });
+
+  // Tanlangan tilga mos ovozni bir marta topib, keshda saqlaymiz — tezlik uchun
+  function pickVoiceForLang(langCode) {
+    if (voiceCache[langCode]) return voiceCache[langCode];
     const voices = window.speechSynthesis.getVoices();
     if (voices.length === 0) return null;
-    const langPriority = ['uz', 'tr', 'ru', 'en'];
-    for (const lang of langPriority) {
-      const found = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(lang));
-      if (found) { cachedUzVoice = found; return found; }
-    }
-    cachedUzVoice = voices[0];
-    return cachedUzVoice;
+    const base = langCode.split('-')[0].toLowerCase();
+    let found = voices.find(v => v.lang && v.lang.toLowerCase() === langCode.toLowerCase());
+    if (!found) found = voices.find(v => v.lang && v.lang.toLowerCase().startsWith(base));
+    if (!found) found = voices[0];
+    voiceCache[langCode] = found;
+    return found;
   }
 
   function speakText(text) {
@@ -746,8 +783,9 @@
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    const voice = pickBestUzVoice();
+    const voice = pickVoiceForLang(selectedVoiceLang);
     if (voice) utterance.voice = voice;
+    utterance.lang = selectedVoiceLang;
     utterance.rate = 1.05;
     utterance.pitch = 1;
 
@@ -770,7 +808,7 @@
     if (!SpeechRecognitionAPI) return;
     stopBargeInWatcher();
     bargeInRecognition = new SpeechRecognitionAPI();
-    bargeInRecognition.lang = 'uz-UZ';
+    bargeInRecognition.lang = selectedVoiceLang;
     bargeInRecognition.continuous = true;
     bargeInRecognition.interimResults = true;
 
@@ -805,7 +843,7 @@
     voiceStatus.textContent = 'Tinglayapman...';
 
     voiceRecognition = new SpeechRecognitionAPI();
-    voiceRecognition.lang = 'uz-UZ';
+    voiceRecognition.lang = selectedVoiceLang;
     voiceRecognition.continuous = false;
     voiceRecognition.interimResults = false;
 
