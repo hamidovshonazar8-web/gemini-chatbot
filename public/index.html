@@ -326,6 +326,25 @@
     justify-content: center;
   }
   .voice-close-btn:hover { background: rgba(255,255,255,0.3); }
+  .voice-select-bar {
+    position: absolute;
+    top: 50px;
+    display: flex;
+    gap: 10px;
+  }
+  .voice-select-btn {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 500;
+    padding: 9px 16px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .voice-select-btn:hover { background: rgba(255,255,255,0.22); }
+  .voice-select-btn.active { background: rgba(66,133,244,0.85); border-color: rgba(66,133,244,0.9); }
   .file-chip-bar {
     max-width: 720px;
     margin: 0 auto 10px auto;
@@ -443,6 +462,11 @@
   </div>
 
   <div class="voice-mode-overlay" id="voiceModeOverlay">
+    <div class="voice-select-bar" id="voiceSelectBar">
+      <button class="voice-select-btn active" data-gender="female">👩 Ayol</button>
+      <button class="voice-select-btn" data-gender="male">👨 Erkak</button>
+      <button class="voice-select-btn" data-gender="child">🧒 Bola</button>
+    </div>
     <div class="voice-orb" id="voiceOrb"></div>
     <div class="voice-status" id="voiceStatus">Tinglayapman...</div>
     <button class="voice-close-btn" id="voiceCloseBtn" title="Yopish">✕</button>
@@ -694,9 +718,54 @@
   const voiceOrb = document.getElementById('voiceOrb');
   const voiceStatus = document.getElementById('voiceStatus');
   const voiceCloseBtn = document.getElementById('voiceCloseBtn');
+  const voiceSelectBtns = document.querySelectorAll('.voice-select-btn');
 
   let voiceModeActive = false;
   let voiceRecognition = null;
+  let bargeInRecognition = null;
+  let selectedGender = 'female';
+  let isAiSpeaking = false;
+
+  // Ovozlarni jins bo'yicha taxminiy ajratish (brauzer ovoz nomlariga qarab)
+  const FEMALE_HINTS = ['female', 'zira', 'samantha', 'victoria', 'susan', 'karen', 'moira', 'tessa', 'fiona', 'ayşe', 'milena', 'anna', 'ekaterina', 'google uk english female', 'google us english'];
+  const MALE_HINTS = ['male', 'david', 'daniel', 'alex', 'fred', 'george', 'james', 'mark', 'yuri', 'google uk english male'];
+  const CHILD_HINTS = ['child', 'kid', 'junior', 'young'];
+
+  function classifyVoice(voice) {
+    const n = voice.name.toLowerCase();
+    if (CHILD_HINTS.some(h => n.includes(h))) return 'child';
+    if (FEMALE_HINTS.some(h => n.includes(h))) return 'female';
+    if (MALE_HINTS.some(h => n.includes(h))) return 'male';
+    return 'female'; // aksariyat tizim ovozlari standart — ayol sifatida ko'rsatamiz
+  }
+
+  function pickVoiceForGender(gender) {
+    const voices = window.speechSynthesis.getVoices();
+    if (voices.length === 0) return null;
+
+    // Til bo'yicha ustuvorlik: uz -> tr (turkiy, yaqin talaffuz) -> ru -> en -> istalgan
+    const langPriority = ['uz', 'tr', 'ru', 'en'];
+    let candidates = voices;
+
+    for (const lang of langPriority) {
+      const inLang = voices.filter(v => v.lang && v.lang.toLowerCase().startsWith(lang));
+      if (inLang.length > 0) { candidates = inLang; break; }
+    }
+
+    const matched = candidates.filter(v => classifyVoice(v) === gender);
+    if (matched.length > 0) return matched[0];
+
+    // Bola ovozi topilmasa, ayol ovozini balandroq pitch bilan simulyatsiya qilamiz
+    return candidates[0] || voices[0];
+  }
+
+  voiceSelectBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      voiceSelectBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedGender = btn.dataset.gender;
+    });
+  });
 
   function speakText(text) {
     if (!('speechSynthesis' in window) || !text) {
@@ -705,24 +774,61 @@
     }
     window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
-    const voices = window.speechSynthesis.getVoices();
-    const uzVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('uz'));
-    const ruVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('ru'));
-    if (uzVoice) utterance.voice = uzVoice;
-    else if (ruVoice) utterance.voice = ruVoice;
+    const voice = pickVoiceForGender(selectedGender);
+    if (voice) utterance.voice = voice;
     utterance.rate = 1;
+    utterance.pitch = selectedGender === 'child' ? 1.6 : (selectedGender === 'male' ? 0.9 : 1.05);
+
     utterance.onstart = () => {
+      isAiSpeaking = true;
       voiceOrb.className = 'voice-orb speaking';
       voiceStatus.textContent = 'Gapiryapman...';
+      startBargeInWatcher();
     };
     utterance.onend = () => {
+      isAiSpeaking = false;
+      stopBargeInWatcher();
       if (voiceModeActive) startVoiceListening();
     };
     window.speechSynthesis.speak(utterance);
   }
 
+  // Foydalanuvchi AI gapirayotganda gapira boshlasa — darhol to'xtatadi
+  function startBargeInWatcher() {
+    if (!SpeechRecognitionAPI) return;
+    stopBargeInWatcher();
+    bargeInRecognition = new SpeechRecognitionAPI();
+    bargeInRecognition.lang = 'uz-UZ';
+    bargeInRecognition.continuous = true;
+    bargeInRecognition.interimResults = true;
+
+    bargeInRecognition.addEventListener('result', (e) => {
+      const last = e.results[e.results.length - 1];
+      const transcript = last[0].transcript.trim();
+      if (transcript.length > 1 && isAiSpeaking) {
+        window.speechSynthesis.cancel();
+        isAiSpeaking = false;
+        stopBargeInWatcher();
+        startVoiceListening();
+      }
+    });
+
+    bargeInRecognition.addEventListener('error', () => {});
+    bargeInRecognition.addEventListener('end', () => {});
+
+    try { bargeInRecognition.start(); } catch (e) { /* ignore */ }
+  }
+
+  function stopBargeInWatcher() {
+    if (bargeInRecognition) {
+      try { bargeInRecognition.stop(); } catch (e) {}
+      bargeInRecognition = null;
+    }
+  }
+
   function startVoiceListening() {
     if (!SpeechRecognitionAPI) return;
+    stopBargeInWatcher();
     voiceOrb.className = 'voice-orb listening';
     voiceStatus.textContent = 'Tinglayapman...';
 
@@ -748,10 +854,6 @@
       }
     });
 
-    voiceRecognition.addEventListener('end', () => {
-      // natija kelmasa yoki bekor qilinsa
-    });
-
     try { voiceRecognition.start(); } catch (e) { /* ignore */ }
   }
 
@@ -769,8 +871,10 @@
 
   voiceCloseBtn.addEventListener('click', () => {
     voiceModeActive = false;
+    isAiSpeaking = false;
     voiceModeOverlay.classList.remove('show');
     window.speechSynthesis.cancel();
+    stopBargeInWatcher();
     if (voiceRecognition) { try { voiceRecognition.stop(); } catch (e) {} }
   });
 
