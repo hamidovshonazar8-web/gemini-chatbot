@@ -264,6 +264,68 @@
   .mic-btn:hover { background: rgba(255,255,255,0.55); }
   .mic-btn.recording { background: #e74c3c; color: #fff; animation: pulse 1.1s infinite; }
   @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 rgba(231,76,60,0.5); } 50% { box-shadow: 0 0 0 8px rgba(231,76,60,0); } }
+  .voice-mode-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #4285f4, #6aa8ff);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 17px;
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(66,133,244,0.45);
+    transition: transform 0.1s;
+  }
+  .voice-mode-btn:hover { transform: scale(1.05); }
+  .voice-mode-btn.active { background: linear-gradient(135deg, #e74c3c, #ff7b6a); animation: pulse2 1.2s infinite; }
+  @keyframes pulse2 { 0%,100% { box-shadow: 0 0 0 0 rgba(231,76,60,0.5); } 50% { box-shadow: 0 0 0 10px rgba(231,76,60,0); } }
+  .voice-mode-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,15,25,0.55);
+    backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 22px;
+    z-index: 50;
+  }
+  .voice-mode-overlay.show { display: flex; }
+  .voice-orb {
+    width: 130px;
+    height: 130px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #4285f4, #9b72cb);
+    box-shadow: 0 0 60px rgba(66,133,244,0.55);
+    animation: orb-idle 3s ease-in-out infinite;
+  }
+  .voice-orb.listening { animation: orb-listen 1s ease-in-out infinite; background: linear-gradient(135deg, #34a853, #4285f4); }
+  .voice-orb.speaking { animation: orb-speak 0.6s ease-in-out infinite; background: linear-gradient(135deg, #e74c3c, #f4b400); }
+  @keyframes orb-idle { 0%,100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+  @keyframes orb-listen { 0%,100% { transform: scale(1); } 50% { transform: scale(1.18); } }
+  @keyframes orb-speak { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1); } }
+  .voice-status { color: #fff; font-size: 15px; font-weight: 500; text-shadow: 0 1px 6px rgba(0,0,0,0.4); }
+  .voice-close-btn {
+    position: absolute;
+    bottom: 60px;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.18);
+    border: 1px solid rgba(255,255,255,0.4);
+    color: #fff;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .voice-close-btn:hover { background: rgba(255,255,255,0.3); }
   .file-chip-bar {
     max-width: 720px;
     margin: 0 auto 10px auto;
@@ -373,10 +435,17 @@
         <input type="file" id="fileInput" accept="image/*,.txt,.md,.csv,.json,.js,.ts,.py,.java,.c,.cpp,.cs,.go,.rb,.php,.html,.css,.sh,.yaml,.yml,.xml,.sql,.log" style="display:none">
         <button class="mic-btn" id="micBtn" title="Ovozli kiritish">🎤</button>
         <textarea id="userInput" placeholder="Xabar yozing..." rows="1"></textarea>
+        <button class="voice-mode-btn" id="voiceModeBtn" title="Ovozli suhbat">🎙️</button>
         <button class="send-btn" id="sendBtn">➤</button>
       </div>
       <div class="footer-note">Gemini API asosida ishlaydi</div>
     </div>
+  </div>
+
+  <div class="voice-mode-overlay" id="voiceModeOverlay">
+    <div class="voice-orb" id="voiceOrb"></div>
+    <div class="voice-status" id="voiceStatus">Tinglayapman...</div>
+    <button class="voice-close-btn" id="voiceCloseBtn" title="Yopish">✕</button>
   </div>
 
 <script>
@@ -619,6 +688,92 @@
     micBtn.style.display = 'none';
   }
 
+  // ===== Ovozli suhbat rejimi (Voice Mode - eshitib, ovoz bilan javob beradi) =====
+  const voiceModeBtn = document.getElementById('voiceModeBtn');
+  const voiceModeOverlay = document.getElementById('voiceModeOverlay');
+  const voiceOrb = document.getElementById('voiceOrb');
+  const voiceStatus = document.getElementById('voiceStatus');
+  const voiceCloseBtn = document.getElementById('voiceCloseBtn');
+
+  let voiceModeActive = false;
+  let voiceRecognition = null;
+
+  function speakText(text) {
+    if (!('speechSynthesis' in window) || !text) {
+      if (voiceModeActive) startVoiceListening();
+      return;
+    }
+    window.speechSynthesis.cancel();
+    const utterance = new SpeechSynthesisUtterance(text);
+    const voices = window.speechSynthesis.getVoices();
+    const uzVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('uz'));
+    const ruVoice = voices.find(v => v.lang && v.lang.toLowerCase().startsWith('ru'));
+    if (uzVoice) utterance.voice = uzVoice;
+    else if (ruVoice) utterance.voice = ruVoice;
+    utterance.rate = 1;
+    utterance.onstart = () => {
+      voiceOrb.className = 'voice-orb speaking';
+      voiceStatus.textContent = 'Gapiryapman...';
+    };
+    utterance.onend = () => {
+      if (voiceModeActive) startVoiceListening();
+    };
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function startVoiceListening() {
+    if (!SpeechRecognitionAPI) return;
+    voiceOrb.className = 'voice-orb listening';
+    voiceStatus.textContent = 'Tinglayapman...';
+
+    voiceRecognition = new SpeechRecognitionAPI();
+    voiceRecognition.lang = 'uz-UZ';
+    voiceRecognition.continuous = false;
+    voiceRecognition.interimResults = false;
+
+    voiceRecognition.addEventListener('result', (e) => {
+      const transcript = e.results[0][0].transcript;
+      if (transcript && transcript.trim()) {
+        voiceStatus.textContent = transcript;
+        userInput.value = transcript;
+        sendVoiceMessage();
+      } else if (voiceModeActive) {
+        startVoiceListening();
+      }
+    });
+
+    voiceRecognition.addEventListener('error', () => {
+      if (voiceModeActive) {
+        setTimeout(() => { if (voiceModeActive) startVoiceListening(); }, 600);
+      }
+    });
+
+    voiceRecognition.addEventListener('end', () => {
+      // natija kelmasa yoki bekor qilinsa
+    });
+
+    try { voiceRecognition.start(); } catch (e) { /* ignore */ }
+  }
+
+  async function sendVoiceMessage() {
+    voiceOrb.className = 'voice-orb';
+    voiceStatus.textContent = 'O\'ylayapman...';
+    await sendMessage(true);
+  }
+
+  voiceModeBtn.addEventListener('click', () => {
+    voiceModeActive = true;
+    voiceModeOverlay.classList.add('show');
+    startVoiceListening();
+  });
+
+  voiceCloseBtn.addEventListener('click', () => {
+    voiceModeActive = false;
+    voiceModeOverlay.classList.remove('show');
+    window.speechSynthesis.cancel();
+    if (voiceRecognition) { try { voiceRecognition.stop(); } catch (e) {} }
+  });
+
   function renderImagePreview() {
     if (!pendingImage) {
       imagePreviewBar.classList.remove('show');
@@ -652,7 +807,7 @@
 
   sendBtn.addEventListener('click', sendMessage);
 
-  async function sendMessage() {
+  async function sendMessage(isVoice) {
     const text = userInput.value.trim();
     if ((!text && !pendingImage) || isStreaming) return;
 
@@ -739,10 +894,18 @@
       chat.messages.push({ role: 'assistant', text: fullText });
       saveChats();
 
+      if (isVoice && voiceModeActive) {
+        speakText(fullText);
+      }
+
     } catch (err) {
       aiContentEl.classList.remove('loading');
       aiContentEl.parentElement.remove();
       renderError(err.message);
+      if (isVoice && voiceModeActive) {
+        voiceStatus.textContent = 'Xatolik yuz berdi, qayta urinib ko\'ring';
+        setTimeout(() => { if (voiceModeActive) startVoiceListening(); }, 1200);
+      }
     } finally {
       isStreaming = false;
       sendBtn.disabled = false;
