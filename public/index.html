@@ -6,6 +6,7 @@
 <title>GrapeGPT</title>
 <meta name="description" content="GrapeGPT — sun'iy intellekt bilan suhbatlashish uchun chat yordamchisi." />
 <meta name="google-site-verification" content="VkmVxzCVKFLD52cg87yLk6OURcpybIy5kmmfOX2nq_4" />
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -442,15 +443,191 @@
   ::-webkit-scrollbar { width: 8px; }
   ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.35); border-radius: 10px; }
   ::-webkit-scrollbar-track { background: transparent; }
+
+  /* ===== Auth (Sign up / Login) ===== */
+  .auth-overlay {
+    position: fixed;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(20,40,60,0.55) 0%, rgba(10,20,40,0.75) 100%),
+      url('https://images.unsplash.com/photo-1506905925346-21bda4d32df4?auto=format&fit=crop&w=1920&q=80');
+    background-size: cover;
+    background-position: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+  }
+  .auth-card {
+    width: 100%;
+    max-width: 360px;
+    margin: 20px;
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid rgba(255,255,255,0.6);
+    border-radius: 22px;
+    padding: 32px 28px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+  }
+  .auth-title { font-size: 22px; font-weight: 700; color: #12213a; text-align: center; margin-bottom: 6px; }
+  .auth-subtitle { font-size: 13px; color: #4a5872; text-align: center; margin-bottom: 22px; }
+  .auth-input {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid rgba(0,0,0,0.12);
+    background: rgba(255,255,255,0.7);
+    font-size: 14px;
+    color: #12213a;
+    margin-bottom: 12px;
+    outline: none;
+  }
+  .auth-input:focus { border-color: #4285f4; }
+  .auth-btn-primary {
+    width: 100%;
+    padding: 12px;
+    border-radius: 12px;
+    border: none;
+    background: linear-gradient(135deg, #4285f4, #6aa8ff);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+  .auth-btn-primary:hover { opacity: 0.92; }
+  .auth-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+  .auth-toggle {
+    text-align: center;
+    font-size: 13px;
+    color: #33415e;
+    margin-top: 16px;
+  }
+  .auth-toggle a { color: #4285f4; font-weight: 600; text-decoration: none; cursor: pointer; }
+  .auth-error {
+    background: rgba(231,76,60,0.15);
+    color: #c0392b;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    margin-bottom: 12px;
+    display: none;
+  }
+  .auth-error.show { display: block; }
+  .auth-success {
+    background: rgba(52,168,83,0.15);
+    color: #1e7e34;
+    padding: 10px 12px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    margin-bottom: 12px;
+    display: none;
+  }
+  .auth-success.show { display: block; }
+
+  .user-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    margin: 0 10px 10px 10px;
+    background: rgba(255,255,255,0.25);
+    border: 1px solid rgba(255,255,255,0.4);
+    border-radius: 14px;
+    font-size: 12px;
+    color: #12213a;
+  }
+  .user-bar .user-email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
+  .user-bar .logout-btn {
+    background: none;
+    border: none;
+    color: #33415e;
+    cursor: pointer;
+    font-size: 12px;
+    text-decoration: underline;
+    flex-shrink: 0;
+  }
+  .usage-badge {
+    font-size: 11px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    background: rgba(66,133,244,0.18);
+    color: #1a4fb4;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .usage-badge.premium { background: rgba(244,180,0,0.25); color: #8a5a00; }
+  .usage-badge.low { background: rgba(231,76,60,0.2); color: #c0392b; }
+
+  .premium-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,15,25,0.6);
+    backdrop-filter: blur(4px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 90;
+  }
+  .premium-modal-overlay.show { display: flex; }
+  .premium-modal {
+    width: 100%;
+    max-width: 340px;
+    margin: 20px;
+    background: rgba(255,255,255,0.92);
+    border-radius: 20px;
+    padding: 28px;
+    text-align: center;
+  }
+  .premium-modal h3 { font-size: 19px; color: #12213a; margin-bottom: 10px; }
+  .premium-modal p { font-size: 13.5px; color: #4a5872; margin-bottom: 20px; line-height: 1.5; }
+  .premium-modal .close-modal-btn {
+    background: rgba(0,0,0,0.06);
+    border: none;
+    padding: 10px 18px;
+    border-radius: 10px;
+    font-size: 13px;
+    color: #33415e;
+    cursor: pointer;
+    margin-top: 6px;
+  }
 </style>
 </head>
 <body>
+
+  <div class="auth-overlay" id="authOverlay">
+    <div class="auth-card">
+      <div class="auth-title" id="authTitle">Xush kelibsiz</div>
+      <div class="auth-subtitle" id="authSubtitle">GrapeGPT'ga kirish uchun tizimga kiring</div>
+      <div class="auth-error" id="authError"></div>
+      <div class="auth-success" id="authSuccess"></div>
+      <input type="email" class="auth-input" id="authEmail" placeholder="Email manzilingiz" autocomplete="email">
+      <input type="password" class="auth-input" id="authPassword" placeholder="Parol" autocomplete="current-password">
+      <button class="auth-btn-primary" id="authSubmitBtn">Kirish</button>
+      <div class="auth-toggle" id="authToggleText">
+        Hisobingiz yo'qmi? <a id="authToggleLink">Ro'yxatdan o'tish</a>
+      </div>
+    </div>
+  </div>
+
+  <div class="premium-modal-overlay" id="premiumModalOverlay">
+    <div class="premium-modal">
+      <h3>Kunlik limit tugadi</h3>
+      <p id="premiumModalText">Bepul kunlik xabarlar limitiga yetdingiz. Premium olib, cheklovsiz suhbatlashing.</p>
+      <button class="close-modal-btn" id="closePremiumModalBtn">Yopish</button>
+    </div>
+  </div>
 
   <div class="sidebar glass" id="sidebar">
     <div class="sidebar-header">
       <button class="new-chat-btn" id="newChatBtn">✚ Yangi suhbat</button>
     </div>
     <div class="chat-list" id="chatList"></div>
+    <div class="user-bar" id="userBar" style="display:none;">
+      <span class="user-email" id="userEmailLabel"></span>
+      <span class="usage-badge" id="usageBadge"></span>
+      <button class="logout-btn" id="logoutBtn">Chiqish</button>
+    </div>
     <div class="sidebar-footer">Gemini API asosida</div>
   </div>
 
@@ -493,6 +670,11 @@
   </div>
 
 <script>
+  // ===== Supabase sozlamalari =====
+  const SUPABASE_URL = 'https://bmrdkyuxrogqvzyusvgh.supabase.co';
+  const SUPABASE_ANON_KEY = 'sb_publishable_11fZD7ow6snFr17y8av8qg_Xiyl9BSA';
+  const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
   const STORAGE_KEY = 'gemini_chats_v1';
 
   const sidebar = document.getElementById('sidebar');
@@ -508,6 +690,158 @@
   const imagePreviewBar = document.getElementById('imagePreviewBar');
   const fileChipBar = document.getElementById('fileChipBar');
   const micBtn = document.getElementById('micBtn');
+
+  // ===== Auth elementlari =====
+  const authOverlay = document.getElementById('authOverlay');
+  const authTitle = document.getElementById('authTitle');
+  const authSubtitle = document.getElementById('authSubtitle');
+  const authError = document.getElementById('authError');
+  const authSuccess = document.getElementById('authSuccess');
+  const authEmail = document.getElementById('authEmail');
+  const authPassword = document.getElementById('authPassword');
+  const authSubmitBtn = document.getElementById('authSubmitBtn');
+  const authToggleText = document.getElementById('authToggleText');
+  const authToggleLink = document.getElementById('authToggleLink');
+  const userBar = document.getElementById('userBar');
+  const userEmailLabel = document.getElementById('userEmailLabel');
+  const usageBadge = document.getElementById('usageBadge');
+  const logoutBtn = document.getElementById('logoutBtn');
+  const premiumModalOverlay = document.getElementById('premiumModalOverlay');
+  const closePremiumModalBtn = document.getElementById('closePremiumModalBtn');
+
+  let isSignUpMode = false;
+  let currentSession = null;
+
+  function showAuthError(msg) {
+    authError.textContent = msg;
+    authError.classList.add('show');
+    authSuccess.classList.remove('show');
+  }
+  function showAuthSuccess(msg) {
+    authSuccess.textContent = msg;
+    authSuccess.classList.add('show');
+    authError.classList.remove('show');
+  }
+  function clearAuthMessages() {
+    authError.classList.remove('show');
+    authSuccess.classList.remove('show');
+  }
+
+  authToggleLink.addEventListener('click', () => {
+    isSignUpMode = !isSignUpMode;
+    clearAuthMessages();
+    if (isSignUpMode) {
+      authTitle.textContent = "Ro'yxatdan o'tish";
+      authSubtitle.textContent = "Yangi hisob yaratib, GrapeGPT'dan foydalaning";
+      authSubmitBtn.textContent = "Ro'yxatdan o'tish";
+      authToggleText.innerHTML = 'Hisobingiz bormi? <a id="authToggleLink">Kirish</a>';
+    } else {
+      authTitle.textContent = "Xush kelibsiz";
+      authSubtitle.textContent = "GrapeGPT'ga kirish uchun tizimga kiring";
+      authSubmitBtn.textContent = "Kirish";
+      authToggleText.innerHTML = "Hisobingiz yo'qmi? <a id=\"authToggleLink\">Ro'yxatdan o'tish</a>";
+    }
+    document.getElementById('authToggleLink').addEventListener('click', () => authToggleLink.click());
+  });
+
+  authSubmitBtn.addEventListener('click', async () => {
+    clearAuthMessages();
+    const email = authEmail.value.trim();
+    const password = authPassword.value;
+
+    if (!email || !password) {
+      showAuthError("Iltimos, email va parolni to'ldiring");
+      return;
+    }
+    if (password.length < 6) {
+      showAuthError("Parol kamida 6 belgidan iborat bo'lishi kerak");
+      return;
+    }
+
+    authSubmitBtn.disabled = true;
+    authSubmitBtn.textContent = '...';
+
+    try {
+      if (isSignUpMode) {
+        const { data, error } = await supabaseClient.auth.signUp({ email, password });
+        if (error) throw error;
+        if (data.session) {
+          currentSession = data.session;
+          onAuthSuccess();
+        } else {
+          showAuthSuccess("Ro'yxatdan o'tdingiz! Endi 'Kirish' orqali tizimga kiring.");
+          isSignUpMode = false;
+          authToggleLink.click();
+        }
+      } else {
+        const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+        currentSession = data.session;
+        onAuthSuccess();
+      }
+    } catch (err) {
+      showAuthError(err.message || "Xatolik yuz berdi, qayta urinib ko'ring");
+    } finally {
+      authSubmitBtn.disabled = false;
+      authSubmitBtn.textContent = isSignUpMode ? "Ro'yxatdan o'tish" : "Kirish";
+    }
+  });
+
+  logoutBtn.addEventListener('click', async () => {
+    await supabaseClient.auth.signOut();
+    currentSession = null;
+    location.reload();
+  });
+
+  closePremiumModalBtn.addEventListener('click', () => {
+    premiumModalOverlay.classList.remove('show');
+  });
+
+  function showPremiumModal(message) {
+    if (message) document.getElementById('premiumModalText').textContent = message;
+    premiumModalOverlay.classList.add('show');
+  }
+
+  async function refreshUsageBadge() {
+    if (!currentSession) return;
+    try {
+      const res = await fetch('/api/usage', {
+        headers: { 'Authorization': `Bearer ${currentSession.access_token}` }
+      });
+      const data = await res.json();
+      if (data.isPremium) {
+        usageBadge.textContent = '⭐ Premium';
+        usageBadge.className = 'usage-badge premium';
+      } else {
+        usageBadge.textContent = `${data.remaining}/${data.limit} xabar`;
+        usageBadge.className = 'usage-badge' + (data.remaining <= 3 ? ' low' : '');
+      }
+    } catch (e) { /* jim */ }
+  }
+
+  function onAuthSuccess() {
+    authOverlay.style.display = 'none';
+    userBar.style.display = 'flex';
+    userEmailLabel.textContent = currentSession.user.email;
+    refreshUsageBadge();
+  }
+
+  async function initAuth() {
+    const { data } = await supabaseClient.auth.getSession();
+    if (data.session) {
+      currentSession = data.session;
+      onAuthSuccess();
+    } else {
+      authOverlay.style.display = 'flex';
+      userBar.style.display = 'none';
+    }
+  }
+
+  supabaseClient.auth.onAuthStateChange((event, session) => {
+    currentSession = session;
+  });
+
+  initAuth();
 
   const WELCOME_HTML = `
     <div class="welcome" id="welcome">
@@ -922,6 +1256,11 @@
   sendBtn.addEventListener('click', sendMessage);
 
   async function sendMessage(isVoice) {
+    if (!currentSession) {
+      authOverlay.style.display = 'flex';
+      return;
+    }
+
     const text = userInput.value.trim();
     if ((!text && !pendingImage) || isStreaming) return;
 
@@ -967,9 +1306,22 @@
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${currentSession.access_token}`
+        },
         body: JSON.stringify({ messages: chat.messages })
       });
+
+      if (response.status === 429) {
+        const errData = await response.json().catch(() => ({}));
+        aiContentEl.classList.remove('loading');
+        aiContentEl.parentElement.remove();
+        chat.messages.pop();
+        saveChats();
+        showPremiumModal(errData.message);
+        return;
+      }
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
@@ -1007,6 +1359,7 @@
       aiContentEl.classList.remove('loading');
       chat.messages.push({ role: 'assistant', text: fullText });
       saveChats();
+      refreshUsageBadge();
 
       if (isVoice && voiceModeActive) {
         speakText(fullText);
